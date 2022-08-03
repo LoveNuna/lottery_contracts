@@ -17,7 +17,7 @@ use crate::coin_helpers::validate_sent_sufficient_coin;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE};
+use crate::state::{State, STATE, Counter: UniversalCounter};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:fury";
@@ -72,14 +72,21 @@ pub fn Stake(
 }
 
 pub fn getCurrentCounter(deps: DepsMut) -> Result<i32, ContractError> {
-    let counter = COUNTER.load(deps.storage)?;
+    let counter: Counter = COUNTER.load(deps.storage)?;
+    Ok(counter.counter)
+}
+
+pub fn incrementCounter(deps: DepsMut) -> Result<i32, ContractError> {
+    let mut counter: Counter = COUNTER.load(deps.storage)?;
+    counter.counter += 1;
+    COUNTER.save(deps.storage, &counter)?;
     Ok(counter.counter)
 }
 
 pub fn begin_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32, endTimeStamp: Timestamp, players: Vec<Addr>, minimumStake: i32, winnerDistribution: Vec<i32>) -> Result<Response, ContractError> {
     // let state = STATE.load(deps.storage)?;
     let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        state.id = getCurrentCounter();
+        state.id = incrementCounter(deps)?;
         state.beginTimeStamp = env.block.time;
         state.endTimeStamp = endTimeStamp;
         state.players = players;
@@ -94,8 +101,16 @@ pub fn delete_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32) 
     let state = STATE.load(deps.storage)?;
     let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
         state.id = id;
+        state.active = false;
         Ok(state)
     })?;
     Ok(Response::new().add_attribute("method", "delete_raffle_round"))
+}
+
+pub fn RNG(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
+    let state = STATE.load(deps.storage)?;
+    // generate random number
+    let mut rng = env.block.random.borrow_mut();
+    Ok(Response::new().add_attribute("method", "RNG"))
 }
 }

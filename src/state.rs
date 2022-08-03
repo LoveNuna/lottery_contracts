@@ -19,10 +19,10 @@ pub struct Raffle
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct UniversalCounter
+pub struct Counter
 {
     pub counter: i32,
 }
 
 pub const STATE: Item<Raffle> = Item::new("raffle");
-pub const COUNTER: Item<UniversalCounter> = Item::new("counter");
+pub const COUNTER: Item<Counter> = Item::new("counter");
