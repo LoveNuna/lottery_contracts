@@ -56,7 +56,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::Stake {amount,denom,staker,} => stake(deps, env, info, amount, denom, staker),
-        ExecuteMsg::BeginRaffleRound {begin_time_stamp, end_time_stamp, minimum_stake, winner_distribution,} => begin_raffle_round(deps, env, info, begin_time_stamp, end_time_stamp, minimum_stake, winner_distribution)
+        ExecuteMsg::BeginRaffleRound {begin_time_stamp, end_time_stamp, minimum_stake, winners_distribution,} => begin_raffle_round(deps, env, info, begin_time_stamp, end_time_stamp, minimum_stake, winners_distribution)
 }
 
 pub fn Stake(
@@ -83,7 +83,7 @@ pub fn incrementCounter(deps: DepsMut) -> Result<i32, ContractError> {
     Ok(counter.counter)
 }
 
-pub fn begin_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32, endTimeStamp: Timestamp, players: Vec<Addr>, minimumStake: i32, winnerDistribution: Vec<i32>) -> Result<Response, ContractError> {
+pub fn begin_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32, endTimeStamp: Timestamp, players: Vec<Addr>, minimumStake: i32, winnersDistribution: Vec<i32>) -> Result<Response, ContractError> {
     // let state = STATE.load(deps.storage)?;
     let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
         state.id = incrementCounter(deps)?;
@@ -91,7 +91,7 @@ pub fn begin_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32, e
         state.endTimeStamp = endTimeStamp;
         state.players = players;
         state.minimumStake = minimumStake;
-        state.winnerDistribution = winnerDistribution;
+        state.winnersDistribution = winnersDistribution;
         Ok(state)
     })?;
     Ok(Response::new().add_attribute("method", "begin_raffle_round"))
@@ -113,4 +113,48 @@ pub fn RNG(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Respon
     let mut rng = env.block.random.borrow_mut();
     Ok(Response::new().add_attribute("method", "RNG"))
 }
+
+pub fn choose_winners(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    id: i32,
+) -> Result<Response, ContractError> {
+    let state = STATE.load(deps.storage)?;
+    let winners_number = RNG();
+    let winners_address = players[winners_number];
+    let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+        state.winners = winners_address;
+        state.active = false;
+        Ok(state)
+    })?;
+    Ok(Response::new().add_attribute("method", "choose_winners"))
 }
+
+pub fn end_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
+    let winner_payouts = calculate_winner_payouts(deps, env, info, id);
+    // transfer amount to players
+    for winner_payout in winner_payouts {
+        let winner_address = winner_payout.0;
+        let winner_amount = winner_payout.1;
+        let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+            state.winners = winner_address;
+            state.active = false;
+            Ok(state)
+        })?;
+        let mut msg = TransferMsg::new();
+        msg.amount = winner_amount;
+        msg.to = winner_address;
+        msg.memo = "winner".to_string();
+        transfer(deps, env, info, msg)?;
+    }
+    Ok(Response::new().add_attribute("method", "end_raffle_round"))
+}
+
+pub fn calculate_winner_payouts(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
+    let state = STATE.load(deps.storage)?;
+    // calculate winner payouts from state.winnersDistribution
+    let winnerPayouts = winnersDistribution.iter().map(|&x| x * minimumStake).sum();
+    Ok(Response::new().add_attribute("method", "calculate_winner_payouts"))
+
+}}

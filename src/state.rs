@@ -11,9 +11,10 @@ pub struct Raffle
     pub beginTimeStamp : Timestamp,
     pub endTimeStamp : Timestamp,
     pub players: Vec<Addr>,
-    pub winner : Vec<Addr>,
-    pub minimumStake : i32,
+    pub winners : Vec<Addr>,
+    pub minimumStake : i32, // Size per slot
     pub winnerDistribution: Vec<i32>,
+    pub winnerPayouts: Vec<i32>,
     pub active: bool,
 }
 

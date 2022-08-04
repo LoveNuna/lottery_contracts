@@ -29,3 +29,15 @@ pub enum QueryMsg {
 pub struct GetCountResponse {
     pub count: i32,
 }
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct GetWinnerResponse {
+    pub winner: Vec<Addr>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct players
+{
+    pub players: Vec<Addr>,
+}
