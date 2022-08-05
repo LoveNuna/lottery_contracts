@@ -61,7 +61,7 @@ pub fn execute(
         ExecuteMsg::ClaimWinning {id,} => claim_winning(deps, env, info, id),
 }
 
-pub fn Stake(
+fn Stake(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
@@ -70,6 +70,9 @@ pub fn Stake(
     staker: Addr,
 ) -> Result<Response, ContractError> {
     let state = STATE.load(deps.storage)?;
+    let transfer_msg = Cw20ExecuteMsg::Transfer {recipient: info.ContractInfo.Addr,amount: };
+    let exec = WasmMsg::Execute {contract_addr: config.minting_contract_address.to_string(),msg: to_binary(&transfer_msg).unwrap(),funds: vec![],};
+    let send_wasm: CosmosMsg = CosmosMsg::Wasm(exec);
 
     Ok(Response::new())
 }
@@ -84,6 +87,14 @@ pub fn incrementCounter(deps: DepsMut) -> Result<i32, ContractError> {
     counter.counter += 1;
     COUNTER.save(deps.storage, &counter)?;
     Ok(counter.counter)
+}
+
+pub fn getRaffleObject(
+    deps: DepsMut,
+    id: u64,
+) -> Result<Raffle, ContractError> {
+    let raffle: Raffle = Raffle::load(deps.storage, id)?;
+    Ok(raffle)
 }
 
 pub fn begin_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32, endTimeStamp: Timestamp, players: Vec<Addr>, minimumStake: i32, winnersDistribution: Vec<i32>) -> Result<Response, ContractError> {
