@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct InstantiateMsg {
     pub count: i32,
     pub stake: String,
-    pub min_bond: Uint128
+    pub min_bond: Uint128,
     pub winner_stake: String
 }
 
