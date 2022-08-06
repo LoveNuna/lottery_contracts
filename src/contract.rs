@@ -74,7 +74,7 @@ fn Stake(
     let exec = WasmMsg::Execute {contract_addr: config.minting_contract_address.to_string(),msg: to_binary(&transfer_msg).unwrap(),funds: vec![],};
     let send_wasm: CosmosMsg = CosmosMsg::Wasm(exec);
 
-    Ok(Response::new())
+    Ok(Response::new().add_attribute("method", "stake").add_message(send_wasm,))
 }
 
 pub fn getCurrentCounter(deps: DepsMut) -> Result<i32, ContractError> {
