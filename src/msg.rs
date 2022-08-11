@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use cosmwasm_std::{Addr, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
@@ -12,8 +13,10 @@ pub struct InstantiateMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
-    Increment {},
-    Reset { count: i32 },
+    // Stake {amount: Uint128, denom: String, staker: Addr},
+    // BeginRaffleRound {begin_time_stamp: Timestamp, end_time_stamp: Timestamp, minimum_stake: Uint128, winners_distribution: Vec<i32>},
+    // EndRaffleRound {id: i32},
+    // ClaimWinning {id: i32},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

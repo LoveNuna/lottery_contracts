@@ -1,23 +1,20 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::{
-    attr, coin, entry_point, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env,
-    MessageInfo, Response, StdError, StdResult, Storage, Uint128,
+    attr, coin, entry_point, to_binary, Addr, BankMsg, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, MessageInfo, Response, Timestamp, Uint128
 };
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult, Timestamp};
 use cw2::set_contract_version;
 
-use cw20::{Balance, Cw20CoinVerified, Cw20ExecuteMsg, Cw20ReceiveMsg, Denom};
+use cw20::{Balance, Cw20CoinVerified, Cw20ExecuteMsg, Cw20Contract, Cw20ReceiveMsg, Denom};
 use cw4::{
     Member, MemberChangedHookMsg, MemberDiff, MemberListResponse, MemberResponse,
     TotalWeightResponse,
 };
 use cw_storage_plus::Bound;
 use cw_utils::{maybe_addr, NativeBalance};
-use crate::coin_helpers::validate_sent_sufficient_coin;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE, COUNTER};
+use crate::state::{COUNTER, RAFFLEMAP};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:fury";
@@ -34,12 +31,9 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    let state = State {
-        count: msg.count,
-        owner: info.sender.clone(),
-    };
+    let state = RAFFLEMAP.load(deps.storage)?;
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    STATE.save(deps.storage, &state)?;
+    RAFFLEMAP.save(deps.storage, &state)?;
 
     Ok(Response::new()
         .add_attribute("method", "instantiate")
@@ -55,35 +49,39 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::Stake {amount,denom,staker,} => stake(deps, env, info, amount, denom, staker),
-        ExecuteMsg::BeginRaffleRound {begin_time_stamp, end_time_stamp, minimum_stake, winners_distribution,} => begin_raffle_round(deps, env, info, id, endTimeStamp, players, minimumStake, winnersDistribution),
-        ExecuteMsg::EndRaffleRound {id,} => end_raffle_round(deps, env, info, id),
-        ExecuteMsg::ClaimWinning {id,} => claim_winning(deps, env, info, id),
+        // ExecuteMsg::Stake_CW {amount,denom,staker,} => stake(deps, env, info, amount, denom, staker),
+        // ExecuteMsg::BeginRaffleRound {begin_time_stamp, end_time_stamp, minimum_stake, winners_distribution,} => begin_raffle_round(deps, env, info, id, endTimeStamp, players, minimumStake),
+        // ExecuteMsg::EndRaffleRound {id,} => end_raffle_round(deps, env, info, id),
+        // ExecuteMsg::ClaimWinning {id,} => claim_winning(deps, env, info, id),
 }
 
-fn Stake(
+fn Stake_CW(
     deps: DepsMut,
     env: Env,
     info: MessageInfo,
-    amount: u128,
-    denom: Denom,
-    staker: Addr,
-) -> Result<Response, ContractError> {
-    let state = STATE.load(deps.storage)?;
-    let transfer_msg = Cw20ExecuteMsg::Transfer {recipient: info.ContractInfo.Addr,amount: };
-    let exec = WasmMsg::Execute {contract_addr: config.minting_contract_address.to_string(),msg: to_binary(&transfer_msg).unwrap(),funds: vec![],};
-    let send_wasm: CosmosMsg = CosmosMsg::Wasm(exec);
+    amount: Uin128,
+    cw20_addr: Addr) {
+    let cw20 = Cw20Contract(cw20_addr);
+    let msg = cw20.call(Cw20ExecuteMsg::Transfer {recipient: env.contract.address.to_string(),amount: amount,});
+    Ok(msg);}
 
-    Ok(Response::new().add_attribute("method", "stake").add_message(send_wasm,))
-}
+pub fn Stake_Native(
+    deps: DepsMut,
+    env: Env,
+    info: MessageInfo,
+    amount: Uint128){
+    let msg = BankMsg::Send {
+        to_address: env.contract.address.to_string(),
+        amount: vec![Coin {denom: "juno".to_string(), amount: amount,},],
+    };}
 
-pub fn getCurrentCounter(deps: DepsMut) -> Result<i32, ContractError> {
-    let counter: Counter = COUNTER.load(deps.storage)?;
+fn getCurrentCounter(deps: DepsMut) -> Result<i32, ContractError> {
+    let counter = COUNTER.load(deps.storage)?;
     Ok(counter.counter)
 }
 
-pub fn incrementCounter(deps: DepsMut) -> Result<i32, ContractError> {
-    let mut counter: Counter = COUNTER.load(deps.storage)?;
+fn incrementCounter(deps: DepsMut) -> Result<i32, ContractError> {
+    let mut counter = COUNTER.load(deps.storage)?;
     counter.counter += 1;
     COUNTER.save(deps.storage, &counter)?;
     Ok(counter.counter)
@@ -93,29 +91,52 @@ pub fn getRaffleObject(
     deps: DepsMut,
     id: u64,
 ) -> Result<Raffle, ContractError> {
-    let raffle: Raffle = Raffle::load(deps.storage, id)?;
+    let raffle = RAFFLEMAP.load(deps.storage)?;
     Ok(raffle)
 }
 
-pub fn begin_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32, endTimeStamp: Timestamp, players: Vec<Addr>, minimumStake: i32, winnersDistribution: Vec<i32>) -> Result<Response, ContractError> {
-    if endBlock < currentBlock {
-    let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        state.id = incrementCounter(deps)?;
-        state.beginTimeStamp = env.block.time;
-        state.endTimeStamp = endTimeStamp;
-        state.players = players;
-        state.minimumStake = minimumStake;
-        state.winnersDistribution = winnersDistribution;
-        Ok(state)
-    })?;} else {
-        return Err(ContractError::InvalidEndBlock);
-    }
+pub fn begin_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32, endTimeStamp: Timestamp, players: Vec<Addr>, minimumStake: u128, winnersDistribution: Vec<i32>) -> Result<Response, ContractError> {
+    let mut endBlock = env.block.height - 10;
+    let mut state = RAFFLEMAP.load(deps.storage)?;
+    let mut state = RAFFLEMAP.update(
+        state.id = incrementCounter(deps)?,
+        state.beginTimeStamp = env.block.time,
+        state.endTimeStamp = endTimeStamp,
+        state.players = players,
+        state.minimumStake = minimumStake,
+        state.winnersDistribution = winnersDistribution);
     Ok(Response::new().add_attribute("method", "begin_raffle_round"))
 }
 
+pub fn join_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: u64) -> Result<Response, ContractError> {
+    let mut endBlock = env.block.height - 10;
+    // get Raffle object
+    let mut raffle = getRaffleObject(deps, id)?;
+    Stake_CW(deps, env, info, raffle.minimumStake, info.sender, info.sender);
+    raffle.players.push(info.sender);
+    Ok(Response::new().add_attribute("method", "join_raffle_round"))
+}
+
+pub fn execute_receive(
+    deps: DepsMut,
+    info: MessageInfo,
+    wrapped: Cw20ReceiveMsg,
+) -> Result<Response, ContractError> {
+    // cw20 address authentication
+    let config = CONFIG.load(deps.storage)?;
+    if config.cw20_addr != info.sender {
+        return Err(ContractError::Unauthorized {});
+    }
+
+    let msg: ReceiveMsg = from_binary(&wrapped.msg)?;
+    match msg {
+        ReceiveMsg::Send { id } => receive_send(deps, id, wrapped.amount, info.sender),
+    }
+}
+
 pub fn delete_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
-    let state = STATE.load(deps.storage)?;
-    let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+    let state = RAFFLEMAP.load(deps.storage)?;
+    let mut state = RAFFLEMAP.update(deps.storage, |mut state| -> Result<_, ContractError> {
         state.id = id;
         state.active = false;
         Ok(state)
@@ -124,8 +145,8 @@ pub fn delete_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32) 
 }
 
 pub fn RNG(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
-    let state = STATE.load(deps.storage)?;
-    let mut rng = env.block.random.borrow_mut();
+    let state = RAFFLEMAP.load(deps.storage)?;
+    let mut rng = env.block.time;
     Ok(Response::new().add_attribute("method", "RNG"))
 }
 
@@ -135,10 +156,10 @@ pub fn choose_winners(
     info: MessageInfo,
     id: i32,
 ) -> Result<Response, ContractError> {
-    let state = STATE.load(deps.storage)?;
-    let winners_number = RNG();
+    let state = RAFFLEMAP.load(deps.storage)?;
+    let winners_number = RNG(deps, env, info, id);
     let winners_address = players[winners_number];
-    let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+    let mut state = RAFFLEMAP.update(deps.storage, |mut state| -> Result<_, ContractError> {
         state.winners = winners_address;
         state.active = false;
         Ok(state)
@@ -146,30 +167,34 @@ pub fn choose_winners(
     Ok(Response::new().add_attribute("method", "choose_winners"))
 }
 
-pub fn end_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
-    let winner_payouts = calculate_winner_payouts(deps, env, info, id);
-    // transfer amount to players
-    for winner_payout in winner_payouts {
-        let winner_address = winner_payout.0;
-        let winner_amount = winner_payout.1;
-        let mut state = STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-            state.winners = winner_address;
-            state.active = false;
-            Ok(state)
-        })?;
-        let mut msg = TransferMsg::new();
-        msg.amount = winner_amount;
-        msg.to = winner_address;
-        msg.memo = "winner".to_string();
-        transfer(deps, env, info, msg)?;
-    }
-    Ok(Response::new().add_attribute("method", "end_raffle_round"))
-}
+// pub fn end_raffle_round(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
+//     let winner_payouts = calculate_winner_payouts(deps, env, info, id);
+//     // transfer amount to players
+//     for winner_payout in winner_payouts {
+//         let winner_address = winner_payout.winner_address;
+//         let winner_amount = winner_payout.1;
+//         let mut state = RAFFLEMAP.update(deps.storage, |mut state| -> Result<_, ContractError> {
+//             state.winners = winner_address;
+//             state.active = false;
+//             Ok(state)
+//         })?;
+//         msg.amount = winner_amount;
+//         msg.to = winner_address;
+//         msg.memo = "winner".to_string();
+//         transfer(deps, env, info, msg)?;
+//     }
+//     Ok(Response::new().add_attribute("method", "end_raffle_round"))
+// }
 
 pub fn calculate_winner_payouts(deps: DepsMut, env: Env, info: MessageInfo, id: i32) -> Result<Response, ContractError> {
-    let state = STATE.load(deps.storage)?;
+    let state = RAFFLEMAP.load(deps.storage)?;
     // calculate winner payouts from state.winnersDistribution
     let winnerPayouts = winnersDistribution.iter().map(|&x| x * minimumStake).sum();
-    Ok(Response::new().add_attribute("method", "calculate_winner_payouts"))
-
+    Ok(Response::new().
+    add_attribute("winnerPayouts", winnerPayouts));
 }}
+
+#[test]
+fn proper_initialization() {
+  assert_eq!(1, 1);
+}

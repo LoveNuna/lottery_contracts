@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{Addr, Timestamp};
 use cw_storage_plus::Item;
+use cw_storage_plus::Map;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Raffle
@@ -12,8 +13,8 @@ pub struct Raffle
     pub endTimeStamp : Timestamp,
     pub players: Vec<Addr>,
     pub winners : Vec<Addr>,
-    pub minimumStake : i32, // Size per slot
-    pub winnerDistribution: Vec<i32>,
+    pub minimumStake : u128, // Size per slot
+    pub winnersDistribution: Vec<i32>,
     pub winnerPayouts: Vec<i32>,
     pub active: bool,
 }
@@ -27,3 +28,4 @@ pub struct Counter
 
 pub const STATE: Item<Raffle> = Item::new("raffle");
 pub const COUNTER: Item<Counter> = Item::new("counter");
+pub const RAFFLEMAP: Map<&str, Raffle> = Map::new("escrow");
