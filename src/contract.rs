@@ -17,7 +17,7 @@ use crate::coin_helpers::validate_sent_sufficient_coin;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE, Counter: UniversalCounter};
+use crate::state::{State, STATE, COUNTER};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:fury";
