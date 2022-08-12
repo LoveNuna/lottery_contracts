@@ -1,13 +1,13 @@
+use cosmwasm_std::{Addr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use cosmwasm_std::{Addr, Uint128};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {
     pub count: i32,
     pub stake: String,
     pub min_bond: Uint128,
-    pub winner_stake: String
+    pub winner_stake: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -33,14 +33,12 @@ pub struct GetCountResponse {
     pub count: i32,
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct GetWinnerResponse {
     pub winner: Vec<Addr>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct players
-{
+pub struct players {
     pub players: Vec<Addr>,
 }

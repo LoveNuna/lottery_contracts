@@ -1,6 +1,6 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-
+use std::fmt;
 use cosmwasm_std::{Addr, Timestamp};
 use cw_storage_plus::Item;
 use cw_storage_plus::Map;
@@ -19,6 +19,13 @@ pub struct Raffle
     pub active: bool,
 }
 
+impl fmt::Display for Raffle
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        write!(f, "Raffle {{ id: {}, beginTimeStamp: {}, endTimeStamp: {}, players: {}, winners: {}, minimumStake: {}, winnersDistribution: {}, winnerPayouts: {}, active: {} }}", self.id, self.beginTimeStamp, self.endTimeStamp, self.players, self.winners, self.minimumStake, self.winnersDistribution, self.winnerPayouts, self.active)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct Counter
