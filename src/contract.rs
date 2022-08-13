@@ -73,9 +73,9 @@ pub fn execute(
         Ok(counter.counter)
     }
 
-    pub fn getRaffleObject(deps: DepsMut, id: u64) -> StdResult<Raffle> {
+    pub fn getRaffleObject(deps: DepsMut, id: u64) -> Result<String> {
         let raffle = RAFFLEMAP.load(deps.storage, &id.to_string());
-        Ok(raffle::Raffle)
+        Ok("Doesn't work yet, type mismatch".to_string())
     }
 
     pub fn begin_raffle_round(
