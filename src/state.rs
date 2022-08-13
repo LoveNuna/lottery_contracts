@@ -17,6 +17,7 @@ pub struct Raffle
     pub winnersDistribution: Vec<i32>,
     pub winnerPayouts: Vec<i32>,
     pub active: bool,
+    pub staking_native: bool,
 }
 
 impl fmt::Display for Raffle

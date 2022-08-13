@@ -25,6 +25,7 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
+    let mut admin = info.sender.clone();
     Ok(Response::new())
 }
 
@@ -87,7 +88,9 @@ pub fn execute(
         players: Vec<Addr>,
         minimumStake: u128,
         winnersDistribution: Vec<i32>,
+        staking_native: bool
     ) -> Result<Response, ContractError> {
+        if(info.sender == contractOwner){
         let raffle = Raffle {
             id: id,
             beginTimeStamp: env.block.time,
@@ -98,10 +101,10 @@ pub fn execute(
             winnersDistribution: winnersDistribution,
             winnerPayouts: Vec::new(),
             active: true,
+            staking_native: staking_native
         };
         let mut state =
-            RAFFLEMAP.save(deps.storage, getCurrentCounter(deps).to_string(), &raffle)?;
-
+            RAFFLEMAP.save(deps.storage, (getCurrentCounter(deps)+1).to_string(), &raffle)?;
         Ok(Response::new().add_attribute("method", "delete_raffle_round"))
     }
 
