@@ -109,7 +109,7 @@ pub fn execute(
         staking_native: bool
     ) {
         //if(isAdmin(deps, env, info, info.sender)){
-        if(true){
+        if true {
         let raffle = Raffle {
             id: id,
             beginTimeStamp: env.block.time,
@@ -131,20 +131,22 @@ pub fn execute(
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
-        id: u64,
+        id: i32,
+        amount: Uint128,
+        tokenAddr: Addr,
     ) -> Result<Response, ContractError> {
         let mut endBlock = env.block.height - 10;
         // get Raffle object
         let raffle = RAFFLEMAP.load(deps.storage, &id.to_string());
+        // deps: DepsMut, env: Env, info: MessageInfo, amount: Uint128, cw20_addr: Addr
         Stake_CW(
             deps,
             env,
             info,
-            100,
-            info.sender,
-            info.sender,
+            amount,
+            tokenAddr
         );
-        raffle.players.push(info.sender);
+        // raffle.players.push(info.sender);
         Ok(Response::new().add_attribute("method", "join_raffle_round"))
     }
 
