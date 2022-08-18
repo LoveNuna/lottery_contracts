@@ -1,4 +1,4 @@
-use cosmwasm_std::{Addr, Uint128};
+use cosmwasm_std::{Addr, Uint128, Timestamp};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,7 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     // Stake {amount: Uint128, denom: String, staker: Addr},
-    // BeginRaffleRound {begin_time_stamp: Timestamp, end_time_stamp: Timestamp, minimum_stake: Uint128, winners_distribution: Vec<i32>},
+    BeginRaffleRound {begin_time_stamp: Timestamp, end_time_stamp: Timestamp, minimum_stake: Uint128, winners_distribution: Vec<i32>},
     // EndRaffleRound {id: i32},
     // ClaimWinning {id: i32},
 }

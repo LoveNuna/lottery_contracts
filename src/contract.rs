@@ -45,7 +45,7 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         // ExecuteMsg::Stake_CW {amount,denom,staker,} => stake&(deps, env, info, amount, denom, staker),
-        // ExecuteMsg::BeginRaffleRound {begin_time_stamp, end_time_stamp, minimum_stake, winners_distribution,} => begin_raffle_round(deps, env, info, id, endTimeStamp, players, minimumStake),
+        ExecuteMsg::BeginRaffleRound {begin_time_stamp, end_time_stamp, minimum_stake, winners_distribution,} => begin_raffle_round(deps, env, info, id, endTimeStamp, players, minimumStake),
         // ExecuteMsg::EndRaffleRound {id,} => end_raffle_round(deps, env, info, id),
         // ExecuteMsg::ClaimWinning {id,} => claim_winning(deps, env, info, id),
 }
@@ -157,15 +157,23 @@ pub fn execute(
         id: i32,
     ) -> Result<Response, ContractError> {
         let state = RAFFLEMAP.load(deps.storage, &id.to_string())?;
-
+        let data = Raffle {
+            id: state.id,
+            beginTimeStamp: state.beginTimeStamp,
+            endTimeStamp: state.endTimeStamp,
+            players: state.players,
+            winners: state.winners,
+            minimumStake: state.minimumStake,
+            winnersDistribution: state.winnersDistribution,
+            winnerPayouts: state.winnerPayouts,
+            active: false,
+            staking_native: state.staking_native
+        };
         let mut state =
             RAFFLEMAP.save(
-                state.id = id,
-                state.beginTimeStamp = env.block.time,
-                state.endTimeStamp = env.block.time,
-                state.players = vec![],
-                state.minimumStake = 0,
-                state.winnersDistribution = vec![],
+                deps.storage,
+                &id.to_string(),
+                &data
             );
         Ok(Response::new().add_attribute("method", "delete_raffle_round"))
     }
@@ -190,12 +198,20 @@ pub fn execute(
         let state = RAFFLEMAP.load(deps.storage, &id.to_string())?;
         let winners_number = RNG(deps, env, info, id);
         let winners_address = "juno16msryt3fqlxtvsy8u5ay7wv2p8mglfg9hrek2e";
-        let mut state =
-            RAFFLEMAP.update(deps.storage, id, {
-                state.winners = winners_address;
-                state.active = false;
-                Ok(state)
-            });
+        let data = Raffle {
+            id: state.id,
+            beginTimeStamp: state.beginTimeStamp,
+            endTimeStamp: state.endTimeStamp,
+            players: state.players,
+            winners: state.winners,
+            minimumStake: state.minimumStake,
+            winnersDistribution: state.winnersDistribution,
+            winnerPayouts: state.winnerPayouts,
+            active: false,
+            staking_native: state.staking_native
+        };
+        // let mut state =
+        // RAFFLEMAP.save(deps.storage, &id.to_string(), &data)?;
         Ok(Response::new().add_attribute("method", "choose_winners"))
     }
 
@@ -212,7 +228,36 @@ pub fn execute(
     // }
 }
 
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MOCK_CONTRACT_ADDR};
+  use cosmwasm_std::{attr, coins, CosmosMsg};
+
 #[test]
-fn proper_initialization() {
-    assert_eq!(1, 1);
+fn create_raffle_object()
+{
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+    let info = mock_info("creator", &[]);
+    let id = 1;
+    let endTimeStamp = Timestamp::from_seconds(1000000000);
+    let players = Vec::new();
+    let minimumStake = Uint128::from(1000000u128);
+    let winnersDistribution = vec![1, 2, 3];
+    let staking_native = true;
+    let res = execute::begin_raffle_round(deps.as_mut(), env, info, id, endTimeStamp, players, minimumStake, winnersDistribution, staking_native);
+    assert_eq!(0, res.unwrap().messages.len());
 }
+
+fn join_raffle_round()
+{
+    let id_to_join = 1;
+    let amount = Uint128::from(1000000u128);
+    let tokenAddr = Addr::from_hex("0x1111111111111111111111111111111111111111").unwrap();
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+    let info = mock_info("joiner", &[]);
+    let res = execute::join_raffle_round(deps.as_mut(), env, info, id_to_join, amount, tokenAddr);
+    assert_eq!(0, res.unwrap().messages.len());}
+
