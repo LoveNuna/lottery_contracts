@@ -13,4 +13,21 @@ pub enum ContractError {
     CustomError { val: String },
     // Add any other custom errors you like here.
     // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
+    #[error("Already Registered")]
+    AlreadyRegistered {},
+
+    #[error("Registrations Closed")]
+    RegistrationsClosed {},
+
+    #[error("Wrong Payment")]
+    WrongPayment {},
+
+    #[error("Must pay by Juno")]
+    MustPayByJuno {},
+
+    #[error("Not sufficient funds")]
+    NotSufficientFunds {},
+
+    #[error("Raffle expired")]
+    RaffleExpired {}
 }
