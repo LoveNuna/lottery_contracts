@@ -29,5 +29,8 @@ pub enum ContractError {
     NotSufficientFunds {},
 
     #[error("Raffle expired")]
-    RaffleExpired {}
+    RaffleExpired {},
+
+    #[error("Raffle not ended")]
+    RaffleNotEnded {}
 }

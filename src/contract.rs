@@ -1,8 +1,9 @@
+use std::cmp;
+
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{Raffle, COUNTER, RAFFLEMAP, ADMINS};
-
-use cosmwasm_std::{StdResult, Deps, Binary, QueryRequest, BankQuery, to_binary};
+use crate::state::{Raffle, COUNTER, RAFFLEMAP, ADMINS, Counter};
+use cosmwasm_std::{StdResult, Deps, Binary, QueryRequest, BankQuery, to_binary, AllBalanceResponse};
 
 use rand_core::{RngCore, SeedableRng};
 use crate::rand::{sha_256, Prng};
@@ -58,12 +59,20 @@ pub fn begin_raffle_round(
     minimum_stake: Uint128,
     winners_distribution: Vec<u32>,
 ) -> Result<Response, ContractError>{
-    if !is_admin(deps.as_ref(), info.sender)? {
+    if !is_admin(deps.as_ref(), info.sender.clone())? {
         return Err(ContractError::Unauthorized {});
     }
 
-    let mut counter = COUNTER.load(deps.storage)?;
-    let id = counter.counter;
+    let counter = COUNTER.load(deps.storage);
+    
+    let id;
+    if let Ok(counter) = counter {
+        id = counter.counter + 1;
+    } else {
+        id = 0;
+    }
+    
+    COUNTER.save(deps.storage, &Counter { counter: id})?;
 
     let raffle = Raffle {
         id,
@@ -76,9 +85,6 @@ pub fn begin_raffle_round(
         winner_payouts: Vec::new(),
         active: true,
     };
-    
-    counter.counter += 1;
-    COUNTER.save(deps.storage, &counter)?;
 
     RAFFLEMAP.save(deps.storage, &id.to_string(), &raffle)?;
 
@@ -91,7 +97,7 @@ pub fn join_raffle_round(
     info: MessageInfo,
     id: u32,
 ) -> Result<Response, ContractError> {
-    if can_register(deps.as_ref(), id)? {
+    if !can_register(deps.as_ref(), id)? {
         return Err(ContractError::RegistrationsClosed {});
     }
 
@@ -135,19 +141,24 @@ pub fn choose_winners(
 
     let raffle = RAFFLEMAP.load(deps.storage, &id.to_string())?;
 
+    if raffle.is_expired(&env.block) {
+        return Err(ContractError::RaffleNotEnded {});
+    }
+
     let prng_seed: Vec<u8> = sha_256(base64::encode("entropy").as_bytes()).to_vec();
     let random_seed = new_entropy(&info, &env, prng_seed.as_ref(), prng_seed.as_ref());
     let mut rng = ChaChaRng::from_seed(random_seed);
 
     let nb_players = raffle.players.len() as u32;
     let total_shares = raffle.clone().winners_distribution.iter().sum::<u32>();
+
     let total_deposit = query_total_deposit(deps.as_ref(), env)?;
 
     let res = Response::new();
     let mut winner_addresses = vec![];
     let mut payouts = vec![];
 
-    for counter in 0..raffle.winners_distribution.len() {
+    for counter in 0..cmp::min(raffle.winners_distribution.len(), nb_players as usize) {
         let id_winner = (rng.next_u32() % nb_players) as usize;
 
         let winner_address = raffle.players[id_winner].to_owned();
@@ -155,7 +166,11 @@ pub fn choose_winners(
         winner_addresses.push(winner_address.clone());
 
         let reward_per_share = total_deposit.checked_div(Uint128::from(total_shares)).unwrap();
+        println!("total_shares: {}, reward_per_share: {}", total_shares, reward_per_share);
+
         let reward = reward_per_share.checked_mul(Uint128::from(raffle.winners_distribution[counter])).unwrap();
+        println!("reward: {}", reward);
+      
         payouts.push(reward);
 
         res.clone().add_message(BankMsg::Send { 
@@ -195,7 +210,6 @@ pub fn is_admin(
 
 fn can_register(deps: Deps, id_lottery: u32) -> Result<bool, ContractError> {
     let raffle = RAFFLEMAP.load(deps.storage, &id_lottery.to_string())?;
-
     return Ok(raffle.active);
 }
 
@@ -232,12 +246,19 @@ pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 pub fn query_total_deposit(deps: Deps, env: Env) -> StdResult<Uint128>{
-    let balance = deps.querier.query(
+    let balance: AllBalanceResponse  = deps.querier.query(
         &QueryRequest::Bank(BankQuery::AllBalances{
             address: env.contract.address.to_string(),
         })
     )?;
-    Ok(balance)
+
+    let juno_amount = balance.amount
+     .iter()
+     .find(|c|c.denom =="ujuno".to_string())
+     .map(|c|c.amount)
+     .unwrap_or_else(Uint128::zero);
+    println!("juno amount: {}", juno_amount);
+    Ok(juno_amount)
 }
 
 fn get_current_counter(deps: Deps) -> StdResult<u32> {
@@ -248,5 +269,179 @@ fn get_current_counter(deps: Deps) -> StdResult<u32> {
 fn get_raffle_info(deps:Deps, id: u32) -> StdResult<Raffle> {
     let raffle = RAFFLEMAP.load(deps.storage, &id.to_string())?;
     Ok(raffle)
+}
+
+#[cfg(test)]
+mod tests {
+    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::{from_binary, Uint128, Timestamp, Coin};
+    use crate::ContractError;
+    use crate::contract::{instantiate, execute, query};
+    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+    use crate::state::Raffle;
+    
+    #[test]
+    fn begin_raffle_round() {
+        let mut deps = mock_dependencies();
+        let info = mock_info("creator", &[]);
+
+        let instantiate_msg = InstantiateMsg {
+            admins: vec!["creator".to_string()]
+        };
+
+        instantiate(deps.as_mut(), mock_env(), info.clone(), instantiate_msg).unwrap();
+
+        let raffle_msg = ExecuteMsg::BeginRaffleRound {
+            end_time_stamp: Timestamp::from_nanos(1000000),
+            minimum_stake: Uint128::from(10 as u32),
+            winners_distribution: vec![1, 2, 3]
+        };
+        
+        let env = mock_env();
+        execute(deps.as_mut(), env.clone(), info, raffle_msg).unwrap();
+
+        let query_msg = QueryMsg::GetRaffleInfo { id: 0};
+        let res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let raffle: Raffle = from_binary(&res).unwrap();
+
+        assert_eq!(raffle, Raffle {
+            id: 0,
+            begin_time_stamp: env.block.time,
+            minimum_stake:  Uint128::from(10 as u32),
+            end_time_stamp: Timestamp::from_nanos(1000000),
+            winners_distribution: vec![1, 2, 3],
+            players: vec![],
+            winner_payouts: vec![],
+            winners: vec![],
+            active: true 
+        });
+    } 
+
+    #[test]
+    fn join_raffle_round() {
+        let mut deps = mock_dependencies();
+        let info = mock_info("creator", &[]);
+
+        let instantiate_msg = InstantiateMsg {
+            admins: vec!["creator".to_string()]
+        };
+
+        instantiate(deps.as_mut(), mock_env(), info.clone(), instantiate_msg).unwrap();
+
+        // begin a raffle
+        let raffle_msg = ExecuteMsg::BeginRaffleRound {
+            end_time_stamp: Timestamp::from_nanos(2_000_000_000_000_000_000),
+            minimum_stake: Uint128::from(10 as u32),
+            winners_distribution: vec![1, 2, 3]
+        };
+        
+        let env = mock_env();
+        execute(deps.as_mut(), env.clone(), info, raffle_msg).unwrap();
+
+        // join the raffle
+        let join_raffle_msg = ExecuteMsg::JoinRaffleRound {
+            id: 0
+        };
+
+        let info = mock_info("player", &[]);
+        let err = execute(deps.as_mut(), mock_env(), info, join_raffle_msg.clone()).unwrap_err();
+        
+        match err {
+            ContractError::WrongPayment { } => { },
+            e => panic!("unexpected error: {}", e),
+        }
+
+        let info = mock_info("player", &[Coin{ denom: "ujuno".to_string(), amount: Uint128::from(10 as u128)}]);
+        execute(deps.as_mut(), mock_env(), info, join_raffle_msg.clone()).unwrap();
+        
+        let query_msg = QueryMsg::GetRaffleInfo { id: 0};
+        let res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        let raffle: Raffle = from_binary(&res).unwrap();
+
+        assert_eq!(raffle, Raffle {
+            id: 0,
+            begin_time_stamp: env.block.time,
+            minimum_stake:  Uint128::from(10 as u32),
+            end_time_stamp: Timestamp::from_nanos(2_000_000_000_000_000_000),
+            winners_distribution: vec![1, 2, 3],
+            players: vec!["player".to_string()],
+            winner_payouts: vec![],
+            winners: vec![],
+            active: true 
+        });
+
+        let info = mock_info("player", &[Coin{ denom: "ujuno".to_string(), amount: Uint128::from(10 as u128)}]);
+        let err = execute(deps.as_mut(), mock_env(), info, join_raffle_msg.clone()).unwrap_err();
+        match err {
+            ContractError::AlreadyRegistered { } => { },
+            e => panic!("unexpected error: {}", e),
+        }
+
+        let info = mock_info("player1", &[Coin{ denom: "ujuno".to_string(), amount: Uint128::from(1 as u128)}]);
+        let err = execute(deps.as_mut(), mock_env(), info, join_raffle_msg).unwrap_err();
+        match err {
+            ContractError::NotSufficientFunds { } => { },
+            e => panic!("unexpected error: {}", e),
+        }   
+    } 
+
+    #[test]
+    fn choose_winners() {
+        let mut deps = mock_dependencies();
+        let info = mock_info("creator", &[]);
+
+        let instantiate_msg = InstantiateMsg {
+            admins: vec!["creator".to_string()]
+        };
+
+        instantiate(deps.as_mut(), mock_env(), info.clone(), instantiate_msg).unwrap();
+
+        // begin a raffle
+        let raffle_msg = ExecuteMsg::BeginRaffleRound {
+            end_time_stamp: Timestamp::from_nanos(2_000_000_000_000_000_000),
+            minimum_stake: Uint128::from(10 as u32),
+            winners_distribution: vec![5, 3, 2]
+        };
+        
+        let env = mock_env();
+        execute(deps.as_mut(), env.clone(), info, raffle_msg).unwrap();
+
+        // join the raffle
+        let join_raffle_msg = ExecuteMsg::JoinRaffleRound {
+            id: 0
+        };
+        let info = mock_info("player", &[Coin{ denom: "ujuno".to_string(), amount: Uint128::from(1_000_000 as u128)}]);
+        execute(deps.as_mut(), mock_env(), info, join_raffle_msg.clone()).unwrap();
+     
+        // join the raffle #2
+        let join_raffle_msg = ExecuteMsg::JoinRaffleRound {
+            id: 0
+        };
+        let info = mock_info("player2", &[Coin{ denom: "ujuno".to_string(), amount: Uint128::from(2_000_000 as u128)}]);
+        execute(deps.as_mut(), mock_env(), info, join_raffle_msg.clone()).unwrap();
+
+        // end the raffle
+        let end_raffle_msg = ExecuteMsg::EndRaffleRound {
+            id: 0
+        };
+        let info = mock_info("creator", &[]);
+        execute(deps.as_mut(), mock_env(), info, end_raffle_msg.clone()).unwrap();
+        
+        // let query_msg = QueryMsg::GetRaffleInfo { id: 0};
+        // let res = query(deps.as_ref(), mock_env(), query_msg).unwrap();
+        // let raffle: Raffle = from_binary(&res).unwrap();
+
+        // assert_eq!(raffle, Raffle {
+        //     id: 0,
+        //     begin_time_stamp: env.block.time,
+        //     minimum_stake:  Uint128::from(500_000 as u32),
+        //     end_time_stamp: Timestamp::from_nanos(2_000_000_000_000_000_000),
+        //     winners_distribution: vec![5, 3, 2],
+        //     players: vec!["player".to_string()],
+        //     winner_payouts: vec![Uint128::from(10 as u32)],
+        //     winners: vec!["player".to_string()],
+        //     active: false 
+        // });
+    } 
 }
 
