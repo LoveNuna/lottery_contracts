@@ -32,5 +32,11 @@ pub enum ContractError {
     RaffleExpired {},
 
     #[error("Raffle not ended")]
-    RaffleNotEnded {}
+    RaffleNotEnded {},
+
+    #[error("Must pay by cw20 tokens")]
+    MustPayByToken{},
+
+    #[error("Expire setting is wrong")]
+    WrongExpire {}
 }

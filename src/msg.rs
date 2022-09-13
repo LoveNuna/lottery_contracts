@@ -1,4 +1,5 @@
-use cosmwasm_std::{Addr, Uint128, Timestamp};
+use cosmwasm_std::{Addr, Uint128};
+use cw20::Cw20ReceiveMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,13 +12,17 @@ pub struct InstantiateMsg {
 #[serde(rename_all = "snake_case")]
 pub enum ExecuteMsg {
     BeginRaffleRound { 
-        end_time_stamp: Timestamp, 
+        expire_type: u8,  // 0: 30 mins, 1: 1 hour, 2: 1 day, 3: 1 week
         minimum_stake: Uint128,
-        winners_distribution: Vec<u32>
+        winners_distribution: Vec<u32>,
+        pay_token: Option<String>,
     },
-    JoinRaffleRound {
+    JoinRaffleRoundByJuno {
         id: u32
     },
+    JoinRaffleRoundByToken (
+        Cw20ReceiveMsg
+    ),
     EndRaffleRound {id: u32},
 }
 

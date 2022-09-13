@@ -17,12 +17,19 @@ pub struct Raffle
     pub winner_payouts: Vec<Uint128>,
     pub winners : Vec<String>,
     pub active: bool,
+    pub pay_token: Option<String>,
 }
 
 impl Raffle {
     pub fn is_expired(&self, block: &BlockInfo) -> bool {
         self.end_time_stamp <= block.time
     }
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct JoinInfo {
+    pub id: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
