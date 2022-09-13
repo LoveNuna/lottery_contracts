@@ -203,7 +203,7 @@ pub fn choose_winners(
 
     let raffle = RAFFLEMAP.load(deps.storage, &id.to_string())?;
 
-    if raffle.is_expired(&env.block) {
+    if !raffle.is_expired(&env.block) {
         return Err(ContractError::RaffleNotEnded {});
     }
 
